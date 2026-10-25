@@ -1,0 +1,93 @@
+# Amendment Monitor — watch register
+#
+# This file is HUMAN-OWNED. The agent reads it and never edits it; machine state
+# lives in register/watch-state.json. Field reference: register/README.md.
+#
+# One entry per publicly fetchable document that is incorporated by reference
+# into an executed agreement (DPA, AUP, subprocessor list, SLA, security
+# addendum, AI/model terms, ...). Set `status: active` to start watching.
+
+version: 1
+
+defaults:
+  timezone: America/New_York
+
+watches:
+  # ---------------------------------------------------------------------------
+  # EXAMPLE ENTRY — replace with a real watch and set `status: active`.
+  # `status: example` entries are always skipped by the agent.
+  # ---------------------------------------------------------------------------
+  - id: acmecloud-dpa
+    status: example                 # example | active | paused | retired
+    counterparty: AcmeCloud, Inc.
+    document:
+      title: AcmeCloud Data Processing Addendum
+      type: dpa                     # dpa | subprocessor_list | aup | sla |
+                                    # security_addendum | ai_terms | privacy_policy | other
+      url: https://www.acmecloud.example/legal/dpa
+      format: html                  # html | pdf
+      selector: "main"              # element holding the document body: tag, #id,
+                                    # .class or tag#id.class — enforced by normalize.py.
+                                    # Omit to fall back to <main>/<article>, else whole page.
+      selector_hint: "main article body; ignore sidebar nav and footer"
+      change_log_url: null          # counterparty's own changelog page, if any
+    incorporated_by:
+      - agreement: AcmeCloud Master Subscription Agreement
+        executed: 2024-11-02
+        our_side: customer          # customer | vendor
+        incorporation_clause: >-
+          MSA §12.3 — DPA incorporated by reference "as updated from time to time"
+        renewal_date: 2026-11-02
+        owner: jane.doe@ourco.example
+    rights:
+      amendment_notice:
+        required: true
+        method: email               # email | portal | posting_only | none
+        clause: DPA §18.2
+        window_days: 60
+        runs_from: notice           # notice | posting
+        remedy: >-
+          Written objection within the window; termination right for affected
+          services if the objection is not resolved.
+      subprocessor_objection:
+        required: true
+        method: posting_only
+        clause: DPA §9.4
+        window_days: 30
+        runs_from: posting
+        remedy: >-
+          Written objection on reasonable data-protection grounds; failing
+          resolution, terminate the affected service without penalty.
+    notes: >-
+      Counterparty historically batches DPA edits with subprocessor additions;
+      check both documents when either changes.
+
+  - id: acmecloud-subprocessors
+    status: example
+    counterparty: AcmeCloud, Inc.
+    document:
+      title: AcmeCloud Subprocessor List
+      type: subprocessor_list
+      url: https://www.acmecloud.example/legal/subprocessors
+      format: html
+      selector: "#subprocessor-table"
+      selector_hint: "the subprocessor table only"
+      change_log_url: null
+    incorporated_by:
+      - agreement: AcmeCloud Master Subscription Agreement
+        executed: 2024-11-02
+        our_side: customer
+        incorporation_clause: DPA §9.1 (list incorporated by reference)
+        renewal_date: 2026-11-02
+        owner: jane.doe@ourco.example
+    rights:
+      subprocessor_objection:
+        required: true
+        method: posting_only
+        clause: DPA §9.4
+        window_days: 30
+        runs_from: posting
+        remedy: >-
+          Written objection on reasonable data-protection grounds; failing
+          resolution, terminate the affected service without penalty.
+    notes: null

@@ -1,0 +1,30 @@
+# Managed Agents environment — applied by scripts/setup.py.
+#
+# Deny-by-default egress. scripts/setup.py APPENDS the hostnames of every
+# active/paused watch in register/watch-register.yaml to allowed_hosts, so the
+# container can curl exactly the registered documents and nothing else.
+# Re-run setup.py after adding watches so the allowlist tracks the register.
+#
+# - github.com / api.github.com cover git push and issue filing (routed through
+#   Anthropic's git proxy, which injects the PAT at egress).
+# - allow_package_managers permits `pip install pypdf` for PDF watches.
+# - web_fetch (the fallback fetcher) runs on Anthropic's servers, but under
+#   `limited` networking the platform applies allowed_hosts to it as well, so
+#   a counterparty host must be listed here before web_fetch can reach it.
+#   setup.py additionally pins the tool's own allowed_domains to the same
+#   hosts, so the fetcher is restricted at both layers.
+# - allowed_hosts entries match the exact hostname (`acme.example` does not
+#   cover `www.acme.example`; wildcards are `*.acme.example`). setup.py lists
+#   every registered hostname verbatim, so no wildcard is needed.
+#
+# If a manual run shows git push failing under limited networking, see
+# docs/hardening.md § Egress.
+name: amendment-monitor-env
+config:
+  type: cloud
+  networking:
+    type: limited
+    allow_package_managers: true
+    allowed_hosts:
+      - github.com
+      - api.github.com

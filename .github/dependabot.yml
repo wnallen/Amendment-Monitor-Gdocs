@@ -1,0 +1,24 @@
+version: 2
+updates:
+  - package-ecosystem: pip
+    directory: /
+    schedule:
+      interval: weekly
+    labels: [dependencies]
+    groups:
+      # Routine tooling bumps land as one PR. pypdf is excluded on purpose:
+      # bumping it changes PDF extraction output and forces a re-baseline of
+      # every PDF watch, and the run skill's pin must move with it (a test
+      # enforces that) — review those PRs individually, don't auto-merge.
+      python-tooling:
+        patterns: ["*"]
+        exclude-patterns: ["pypdf"]
+        update-types: ["minor", "patch"]
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    labels: [dependencies]
+    groups:
+      github-actions:
+        patterns: ["*"]

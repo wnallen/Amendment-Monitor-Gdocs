@@ -1,0 +1,99 @@
+# Tripwire: opens a security issue if a commit attributed to the monitor
+# touches paths the agent must never write (its lane is snapshots/, alerts/,
+# runs/, and register/watch-state.json).
+#
+# This is DETECTION, not enforcement — commit authorship is client-supplied
+# and spoofable. Server-side enforcement comes from a GitHub push ruleset on a
+# dedicated machine-account PAT: see docs/hardening.md.
+#
+# The push webhook payload lists at most 20 commits, so the check walks the
+# full before..after range through the API instead of trusting the payload.
+name: protected-paths-guard
+on:
+  push:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  guard:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        with:
+          script: |
+            const PROTECTED = [
+              '.claude/', 'agent/', 'scripts/', 'tests/', '.github/', 'config/', 'docs/',
+              'register/watch-register.yaml', 'register/README.md',
+              'README.md', 'requirements.txt', 'requirements-dev.txt', 'pyproject.toml', '.gitignore',
+            ];
+            const MONITOR_EMAIL = 'amendment-monitor@users.noreply.github.com';
+            // If you use a dedicated machine account for the monitor PAT
+            // (recommended — docs/hardening.md), put its login here so the
+            // check keys on the server-verified pusher, not commit metadata.
+            const MONITOR_ACTORS = [];
+
+            const { owner, repo } = context.repo;
+            const pusher = context.payload.pusher?.name || context.actor;
+            const pusherIsMonitor = MONITOR_ACTORS.includes(pusher);
+            const before = context.payload.before;
+            const after = context.payload.after;
+            const EMPTY = '0000000000000000000000000000000000000000';
+
+            // Enumerate every commit in the push (the API caps compare at 250
+            // commits; a monitor run pushes one).
+            let shas = [];
+            if (before && before !== EMPTY && !context.payload.deleted) {
+              try {
+                for (let page = 1; page <= 5; page++) {
+                  const { data } = await github.rest.repos.compareCommitsWithBasehead({
+                    owner, repo, basehead: `${before}...${after}`, per_page: 100, page,
+                  });
+                  shas.push(...(data.commits || []).map(c => c.sha));
+                  if (!data.commits || data.commits.length < 100) break;
+                }
+              } catch (e) {
+                core.warning(`compare failed (${e.message}); falling back to payload commits`);
+                shas = [];
+              }
+            }
+            if (!shas.length) shas = (context.payload.commits || []).map(c => c.id);
+
+            const hits = [];
+            for (const sha of shas) {
+              // getCommit paginates its `files` list; keep reading while pages are full.
+              let files = [], commit = null;
+              for (let page = 1; page <= 10; page++) {
+                const { data } = await github.rest.repos.getCommit({ owner, repo, ref: sha, page, per_page: 100 });
+                commit = commit ?? data;
+                files.push(...(data.files || []));
+                if (!data.files || data.files.length < 100) break;
+              }
+              const email = commit.commit?.author?.email || '';
+              const fromMonitor = email === MONITOR_EMAIL || pusherIsMonitor;
+              if (!fromMonitor) continue;
+              const paths = files.flatMap(f => [f.filename, f.previous_filename].filter(Boolean));
+              const bad = paths.filter(f => PROTECTED.some(p => f === p || f.startsWith(p)));
+              if (bad.length) hits.push({ sha, files: [...new Set(bad)] });
+            }
+            if (!hits.length) return;
+
+            const lines = hits.map(h => `- \`${h.sha.slice(0, 12)}\`: ${h.files.map(f => '`' + f + '`').join(', ')}`);
+            await github.rest.issues.create({
+              owner, repo,
+              title: 'SECURITY: monitor commit modified protected paths',
+              labels: ['amendment-alert', 'security'],
+              body: [
+                'A commit attributed to the Amendment Monitor agent modified paths outside its write lane.',
+                'This may indicate prompt injection from a watched document. Review and revert before the next scheduled run mounts these files.',
+                '',
+                ...lines,
+                '',
+                `Push: ${context.payload.compare}`,
+                '',
+                'See docs/hardening.md for server-side enforcement via a push ruleset.',
+              ].join('\n'),
+            });
+            core.setFailed(`${hits.length} monitor commit(s) touched protected paths`);

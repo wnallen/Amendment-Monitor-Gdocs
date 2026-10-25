@@ -1,0 +1,25 @@
+# Tooling config only — this repository is not a distributable package.
+# Install with: pip install -r requirements.txt -r requirements-dev.txt
+
+[tool.ruff]
+target-version = "py310"
+line-length = 120
+extend-exclude = ["snapshots", "alerts", "runs"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "C4", "PLW", "RUF", "SIM"]
+ignore = [
+  "E501",   # line length is enforced by `ruff format`, not the linter
+  "RUF001", "RUF002", "RUF003",  # legal text legitimately uses en dashes and section signs
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["PLW1510"]  # subprocess.run(check=...) is asserted on explicitly
+
+[tool.mypy]
+python_version = "3.10"
+strict_optional = true
+warn_unused_ignores = true
+warn_redundant_casts = true
+ignore_missing_imports = true
+files = ["scripts", "tests"]

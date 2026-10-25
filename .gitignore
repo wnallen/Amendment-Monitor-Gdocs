@@ -1,0 +1,9 @@
+__pycache__/
+*.pyc
+.venv/
+venv/
+.env
+.mypy_cache/
+.ruff_cache/
+# check.py writes watch-state.json via a temp file beside it; never commit a stray one
+register/.watch-state.*

@@ -1,0 +1,59 @@
+# Scheduled deployment template — consumed by scripts/setup.py (which adds the
+# agent/environment IDs, the GitHub repository resource, and the budget).
+#
+# Each firing creates a fresh session that mounts this repository and runs the
+# amendment-monitor-run skill. Execution is jittered by the platform (up to 9
+# minutes past the listed time) — do not build downstream deadlines on the
+# exact minute.
+name: Amendment Monitor — weekly check
+
+schedule:
+  type: cron
+  expression: "30 6 * * 1"          # weekly, Mondays 06:30. Keep the interval well
+                                    # under the shortest objection window (30 days).
+  timezone: America/New_York
+
+# Hard per-run spend cap, in USD cents (integer string). Copied onto each fired
+# session; a session that hits it pauses rather than overspending.
+budget_cents: "1500"                # $15.00 per run
+
+# The kickoff is an outcome (rubric-graded), not a bare message: the platform
+# grades each iteration against the rubric and the agent revises until it
+# passes or max_iterations is reached.
+outcome:
+  description: >-
+    Complete one Amendment Monitor run over register/watch-register.yaml per the
+    repository skill amendment-monitor-run, ending with all results committed
+    and pushed.
+  max_iterations: 2
+  rubric: |
+    # Amendment Monitor run — acceptance criteria
+    - Every watch with status: active in register/watch-register.yaml was either
+      fetched successfully or has its failure recorded in both the run report and
+      register/watch-state.json.
+    - Every successful fetch whose normalized content hash differs from the prior
+      hash has a new snapshot pair under snapshots/<id>/ (content .md + .meta.json
+      with sha256, pipeline, normalizer_version, selector and extractor);
+      first-ever fetches are recorded as baselines without alerts, snapshots
+      produced by a different pipeline/normalizer/selector/extractor than the
+      prior one were re-baselined rather than alerted when substantively
+      identical, and all normalization went through scripts/normalize.py with
+      the register's format and selector.
+    - No files outside snapshots/, alerts/, runs/, and register/watch-state.json
+      were created or modified.
+    - Every detected change has a diff under alerts/<id>/<run-ts>/ and a severity
+      + category classification traceable to quoted before/after text.
+    - Every material or substantive change has an analysis.md containing exposure
+      mapping (agreements, side, owner), a clock table with a conservative AND a
+      latest-plausible deadline including the runs_from basis and caveats, and
+      ordered recommended next steps.
+    - Every material or substantive change has a GitHub issue filed in this
+      repository (label amendment-alert), or the issue-filing failure is recorded
+      in the run report with the committed analysis.md as fallback.
+    - No previously alerted from-hash -> to-hash transition was re-alerted.
+    - register/watch-state.json is updated for every processed watch and
+      register/watch-register.yaml itself is unmodified.
+    - runs/<run-ts>.md exists, matches what actually happened, and a copy was
+      written to /mnt/session/outputs/run-report.md.
+    - All new and changed files are committed and pushed to the repository's
+      default branch (no force-push).
