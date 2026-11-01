@@ -3,6 +3,6 @@
 # sandbox (see .claude/skills/amendment-monitor-run/SKILL.md) so the PDF test
 # exercises the extractor that production snapshots are built with.
 pypdf==6.21.1
-ruff==0.17.1
-mypy==2.4.0
+ruff==0.17.3
+mypy==2.4.1
 types-PyYAML>=6.0.12.20260906
