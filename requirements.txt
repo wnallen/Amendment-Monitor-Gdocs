@@ -1,2 +1,2 @@
-anthropic>=1.15.0,<3
+anthropic>=2.3.0,<3
 PyYAML>=6.0.3
